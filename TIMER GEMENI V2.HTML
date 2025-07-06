@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TO-DO LIST</title>
+  <style>
+    :root {
+      --bg-color: #f4f4f4;
+      --text-color: #333;
+      --card-bg: #fff;
+      --done-color: gray;
+      --active-color: #e0f7fa;
+      --pie-open-color: #ffcdd2;
+      --pie-done-color: #c8e6c9;
+      --priority-high: #ffcdd2;
+      --priority-medium: #fff9c4;
+      --priority-low: #c8e6c9;
+      --modal-bg: rgba(0,0,0,0.5);
+      --chart-bar-color: #a3d5ff;
+    }
+
+    [data-theme="dark"] {
+      --bg-color: #121212;
+      --text-color: #e0e0e0;
+      --card-bg: #1e1e1e;
+      --done-color: #888;
+      --active-color: #003366;
+      --pie-open-color: #8c5a5a;
+      --pie-done-color: #5a8c5a;
+      --priority-high: #8c5a5a;
+      --priority-medium: #8c865a;
+      --priority-low: #5a8c5a;
+      --chart-bar-color: #003366;
+    }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      padding: 20px;
+      max-width: 800px;
+      margin: auto;
+    }
+
+    h1, h2, h3 { text-align: center; }
+
+    input, select, button {
+      padding: 10px;
+      font-size: 16px;
+      margin: 5px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+    input[type="number"] { width: 80px; }
+
+    button { cursor: pointer; }
+    
+    .top-input, .task-filters, .pomodoro-controls, .controls, .bottom-buttons, .main-nav {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 10px;
+        margin-bottom: 20px;
+        align-items: center;
+    }
+
+    ul { list-style-type: none; padding-left: 0; }
+    .dashboard-section ul { padding: 0 20px; }
+    .dashboard-section li { background-color: var(--bg-color); margin-bottom: 5px; padding: 10px; border-radius: 5px; }
+
+    .task {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background-color: var(--card-bg);
+      padding: 15px;
+      margin-top: 10px;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      border-left: 5px solid transparent;
+      transition: background-color 0.3s;
+    }
+    .task.dragging { opacity: 0.5; }
+
+    .task.priority-High { border-left-color: var(--priority-high); }
+    .task.priority-Medium { border-left-color: var(--priority-medium); }
+    .task.priority-Low { border-left-color: var(--priority-low); }
+
+    .task.active { background-color: var(--active-color); }
+    
+    .task.done .task-name { 
+      text-decoration: line-through; 
+      color: var(--done-color);
+    }
+
+    .task-text-content { display: flex; flex-direction: column; flex-grow: 1; }
+    .task-details, .task-tags { font-size: 0.8em; color: #666; margin-top: 4px; }
+    .task-tag { background-color: #eee; display: inline-block; padding: 2px 6px; border-radius: 10px; font-size: 0.9em; margin-right: 5px;}
+    .task-controls { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+    
+    .edit-form { flex-grow: 1; display: flex; flex-wrap: wrap; gap: 10px; }
+    .edit-form input, .edit-form select { flex-grow: 1; }
+
+    .timer { font-size: 4em; text-align: center; margin: 20px 0; }
+    #pomodoroState { font-size: 0.5em; text-transform: uppercase; letter-spacing: 2px; }
+
+    .dashboard-section, #progressSection, #dailyHoursSection { margin: 20px 0; padding: 10px; text-align: center; background-color: var(--card-bg); border-radius: 8px; }
+
+    /* Styles for new productivity chart */
+    #productivity-chart { display: flex; justify-content: space-around; align-items: flex-end; height: 200px; border-left: 2px solid var(--text-color); border-bottom: 2px solid var(--text-color); padding: 10px; }
+    .chart-bar-container { display: flex; flex-direction: column; align-items: center; flex-grow: 1; font-size: 0.7em;}
+    .chart-bar { width: 80%; background-color: var(--chart-bar-color); }
+
+    .modal {
+        display: none; position: fixed; z-index: 1000; left: 0; top: 0;
+        width: 100%; height: 100%; overflow: auto; background-color: var(--modal-bg);
+    }
+    .modal-content {
+        background-color: var(--card-bg); margin: 15% auto; padding: 20px;
+        border: 1px solid #888; width: 80%; max-width: 500px; border-radius: 10px;
+    }
+    .modal-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;}
+  </style>
+</head>
+<body data-theme="light">
+  <h1>TO-DO LIST <span id="themeIndicator">☀️</span></h1>
+  
+  <div class="main-nav">
+    <button onclick="showPage('main-page')">To-Do List</button>
+    <button onclick="showPage('dashboard-page')">Dashboard</button>
+  </div>
+  <hr>
+
+  <div id="main-page">
+    <div class="top-input">
+      <input type="text" id="taskInput" placeholder="Enter a task" style="flex-grow: 1;"/>
+      <input type="number" id="estimateInput" placeholder="Est (min)" style="width: 80px;">
+      <input type="text" id="tagsInput" placeholder="Tags (comma-sep)" >
+      <select id="priorityInput">
+        <option value="Medium">Medium Priority</option>
+        <option value="High">High Priority</option>
+        <option value="Low">Low Priority</option>
+      </select>
+      <button onclick="addTask()">Add Task</button>
+    </div>
+    <div class="task-filters">
+      <input type="text" id="tagFilterInput" placeholder="Filter by tag...">
+      <button onclick="sortTasksByPriority()">Sort by Priority</button>
+    </div>
+    <ul id="taskList"></ul>
+    <div id="dailyHoursSection">
+        <h2>Daily Hours Tracked</h2>
+        <div id="dailyHoursDisplay">No work tracked yet.</div>
+    </div>
+    <div id="progressSection">
+      <h2>Task Progress</h2>
+      <canvas id="progressChart" width="150" height="150"></canvas>
+      <div id="progressText"></div>
+      <button onclick="showStatsModal()">View Stats</button>
+    </div>
+    <div class="timer" id="timer">25:00</div>
+    <div style="text-align: center; margin-top: -20px;" id="pomodoroState">WORK (1/4)</div>
+    <div class="pomodoro-controls">
+        <label>Work: <input type="number" id="workDuration" value="25" min="1"></label>
+        <label>Short Break: <input type="number" id="shortBreakDuration" value="5" min="1"></label>
+        <label>Long Break: <input type="number" id="longBreakDuration" value="15" min="1"></label>
+        <button onclick="updatePomodoroDurations()">Set Durations</button>
+    </div>
+    <div class="controls">
+      <button onclick="startTimer()">Start</button>
+      <button onclick="pauseTimer()">Pause</button>
+      <button onclick="stopTimer()">Stop</button>
+      <button onclick="resetTimer(false)">Reset Cycle</button>
+      <button onclick="stopAndSwitch()">Next</button>
+    </div>
+    <div class="bottom-buttons">
+      <label><input type="checkbox" id="soundToggle" checked> 🔊 Alarm</label>
+      <input type="file" id="customSound" accept="audio/*">
+      <button onclick="saveTasksToFile()">💾 Export JSON</button>
+      <input type="file" accept=".json" onchange="loadTasksFromFile(event)">
+      <button onclick="toggleDarkMode()">🌓 Toggle Dark Mode</button>
+    </div>
+  </div>
+
+  <div id="dashboard-page" style="display: none;">
+    <h2>Dashboard</h2>
+    <div class="dashboard-section" id="completed-tasks-section">
+      <h3>Completed Tasks</h3>
+      <ul id="completed-tasks-list"></ul>
+    </div>
+    <div class="dashboard-section" id="monthly-hours-section">
+      <h3>Monthly Hours</h3>
+      <div id="monthly-hours-display"></div>
+    </div>
+    <div class="dashboard-section" id="productivity-section">
+      <h3>Productivity by Hour</h3>
+      <div id="productivity-chart"></div>
+    </div>
+  </div>
+
+
+  <audio id="alarmSound" src="https://www.soundjay.com/button/beep-07.mp3" preload="auto"></audio>
+  <div id="confirmModal" class="modal"> <div class="modal-content"> <p id="confirmText"></p> <div class="modal-buttons"> <button id="confirmBtnNo">Cancel</button> <button id="confirmBtnYes">Confirm</button> </div> </div> </div>
+  <div id="statsModal" class="modal"> <div class="modal-content"> <h2>Statistics</h2> <div id="statsContent"></div> <div class="modal-buttons"> <button onclick="document.getElementById('statsModal').style.display='none'">Close</button> </div> </div> </div>
+
+  <script>
+    // --- All JavaScript code from previous steps, plus new functions ---
+
+    // NEW: Function to switch between pages
+    function showPage(pageId) {
+        document.getElementById('main-page').style.display = 'none';
+        document.getElementById('dashboard-page').style.display = 'none';
+        document.getElementById(pageId).style.display = 'block';
+
+        if (pageId === 'dashboard-page') {
+            renderCompletedTasks();
+            renderMonthlyHours();
+            renderProductivityChart();
+        }
+    }
+
+    // NEW: Function to render the completed tasks list
+    function renderCompletedTasks() {
+        const tasks = JSON.parse(localStorage.getItem("tasks")) || [];
+        const completedList = document.getElementById('completed-tasks-list');
+        completedList.innerHTML = '';
+        const completedTasks = tasks.filter(task => task.done);
+        
+        if (completedTasks.length === 0) {
+            completedList.innerHTML = '<li>No completed tasks yet.</li>';
+            return;
+        }
+
+        completedTasks.forEach(task => {
+            const li = document.createElement('li');
+            li.textContent = task.text;
+            completedList.appendChild(li);
+        });
+    }
+
+    // NEW: Function to render monthly hours summary
+    function renderMonthlyHours() {
+        const tasks = JSON.parse(localStorage.getItem("tasks")) || [];
+        const monthlyTotals = {}; // e.g. {'2025-07': 3600}
+        
+        tasks.forEach(task => {
+            if (task.history) {
+                task.history.forEach(entry => {
+                    const date = new Date(entry.date);
+                    const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+                    if (!monthlyTotals[monthKey]) monthlyTotals[monthKey] = 0;
+                    monthlyTotals[monthKey] += entry.duration;
+                });
+            }
+        });
+
+        const display = document.getElementById('monthly-hours-display');
+        if (Object.keys(monthlyTotals).length === 0) {
+            display.innerHTML = "<p>No work tracked yet.</p>";
+            return;
+        }
+        
+        let html = '<ul>';
+        for (const monthKey in monthlyTotals) {
+            const [year, month] = monthKey.split('-');
+            const monthName = new Date(year, month - 1, 1).toLocaleString('default', { month: 'long' });
+            html += `<li><strong>${monthName} ${year}:</strong> ${formatTime(monthlyTotals[monthKey])}</li>`;
+        }
+        html += '</ul>';
+        display.innerHTML = html;
+    }
+
+    // NEW: Function to render the productivity bar chart
+    function renderProductivityChart() {
+        const tasks = JSON.parse(localStorage.getItem("tasks")) || [];
+        const hourlyTotals = Array(24).fill(0); // Index 0 is 12 AM, 23 is 11 PM
+
+        tasks.forEach(task => {
+            if (task.history) {
+                task.history.forEach(entry => {
+                    const hour = new Date(entry.date).getHours();
+                    hourlyTotals[hour] += entry.duration;
+                });
+            }
+        });
+
+        const chart = document.getElementById('productivity-chart');
+        chart.innerHTML = '';
+        const maxTime = Math.max(...hourlyTotals);
+
+        if (maxTime === 0) {
+            chart.innerHTML = '<p>No productivity data to display.</p>';
+            return;
+        }
+
+        hourlyTotals.forEach((total, hour) => {
+            const barContainer = document.createElement('div');
+            barContainer.className = 'chart-bar-container';
+
+            const bar = document.createElement('div');
+            bar.className = 'chart-bar';
+            const barHeight = (total / maxTime) * 100;
+            bar.style.height = `${barHeight}%`;
+            bar.title = `${formatTime(total)} tracked`;
+            
+            const label = document.createElement('span');
+            label.textContent = hour % 12 === 0 ? 12 : hour % 12; // Display 12, 1, 2...
+            label.textContent += (hour < 12) ? 'a' : 'p'; // am/pm
+
+            barContainer.appendChild(bar);
+            barContainer.appendChild(label);
+            chart.appendChild(barContainer);
+        });
+    }
+    
+    // --- All other functions remain below ---
+
+    let timerInterval; let timeLeft = 25 * 60; let isPaused = true;
+    let activeTaskElement = null; let pomodoroState = 'work'; let pomodoroCycle = 1;
+    let sessionStartTime = null; let pomodoroDurations = { work: 25, shortBreak: 5, longBreak: 15 };
+
+    window.onload = function () {
+      loadTasks(); updatePomodoroDurations(); calculateAndDisplayDailyHours();
+      document.getElementById("customSound").addEventListener("change", handleCustomSound);
+      document.getElementById("taskInput").addEventListener("keydown", (e) => { if (e.key === "Enter") addTask(); });
+      document.getElementById("tagFilterInput").addEventListener("input", filterTasksByTag);
+      addDragAndDropHandlers(); addKeyboardShortcuts();
+      if ("Notification" in window) { Notification.requestPermission(); }
+      showPage('main-page');
+    };
+    function addTask() {
+      const input = document.getElementById("taskInput"); if (!input.value.trim()) return;
+      const taskData = { text: input.value.trim(), done: false, timeSpent: 0, estimate: parseInt(document.getElementById('estimateInput').value) || 0,
+        priority: document.getElementById('priorityInput').value, tags: document.getElementById('tagsInput').value.split(',').map(t => t.trim().toLowerCase()).filter(Boolean),
+        id: Date.now(), history: [] };
+      const li = createTaskElement(taskData); document.getElementById("taskList").appendChild(li); saveTasks(); updateProgressChart();
+      input.value = ""; document.getElementById('estimateInput').value = ""; document.getElementById('tagsInput').value = "";
+    }
+    function createTaskElement(taskData) {
+        const li = document.createElement("li"); li.className = `task priority-${taskData.priority}`;
+        if (taskData.done) { li.classList.add('done'); }
+        li.dataset.id = taskData.id; li.dataset.timeSpent = taskData.timeSpent; li.dataset.tags = taskData.tags.join(',');
+        li.dataset.estimate = taskData.estimate; li.dataset.priority = taskData.priority; li.setAttribute('draggable', true);
+        const textContentDiv = document.createElement('div'); textContentDiv.className = 'task-text-content';
+        const span = document.createElement("span"); span.textContent = taskData.text; span.className = 'task-name';
+        textContentDiv.appendChild(span);
+        const detailsSpan = document.createElement('span'); detailsSpan.className = 'task-details';
+        const estimateText = taskData.estimate > 0 ? `Est: ${taskData.estimate}m` : '';
+        const trackedText = `Tracked: ${formatTime(taskData.timeSpent)}`; detailsSpan.textContent = `${estimateText} | ${trackedText}`;
+        textContentDiv.appendChild(detailsSpan);
+        const tagsDiv = document.createElement('div'); tagsDiv.className = 'task-tags';
+        if(taskData.tags && taskData.tags.length > 0) {
+            taskData.tags.forEach(tag => {
+                const tagSpan = document.createElement('span'); tagSpan.className = 'task-tag';
+                tagSpan.textContent = `#${tag}`; tagsDiv.appendChild(tagSpan);
+            });
+        }
+        textContentDiv.appendChild(tagsDiv); li.appendChild(textContentDiv);
+        const controlsDiv = document.createElement("div"); controlsDiv.classList.add("task-controls");
+        const selectBtn = document.createElement("button"); selectBtn.textContent = "Select";
+        selectBtn.onclick = () => {
+            if (li.classList.contains('active')) {
+                li.classList.remove('active'); activeTaskElement = null; selectBtn.textContent = 'Select';
+            } else {
+                document.querySelectorAll('#taskList .task').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('#taskList .task button').forEach(b => { if(b.textContent === 'Selected') b.textContent = 'Select' });
+                li.classList.add('active'); activeTaskElement = li; selectBtn.textContent = 'Selected';
+            }
+        };
+        const editBtn = document.createElement("button"); editBtn.textContent = "Edit";
+        editBtn.onclick = () => {
+            if (editBtn.textContent === "Edit") {
+                textContentDiv.style.display = 'none'; const editForm = document.createElement('div'); editForm.className = 'edit-form';
+                const priorityOptions = ['High', 'Medium', 'Low'].map(p => `<option value="${p}" ${li.dataset.priority === p ? 'selected' : ''}>${p}</option>`).join('');
+                editForm.innerHTML = `
+                    <input type="text" class="edit-text" value="${span.textContent}" placeholder="Task Name">
+                    <input type="number" class="edit-estimate" value="${li.dataset.estimate}" placeholder="Est (min)">
+                    <input type="text" class="edit-tags" value="${li.dataset.tags}" placeholder="Tags (comma-sep)">
+                    <select class="edit-priority">${priorityOptions}</select>`;
+                li.insertBefore(editForm, controlsDiv); editBtn.textContent = "Save";
+            } else {
+                const editForm = li.querySelector('.edit-form'); const newText = editForm.querySelector('.edit-text').value;
+                const newEstimate = parseInt(editForm.querySelector('.edit-estimate').value) || 0;
+                const newTags = editForm.querySelector('.edit-tags').value.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+                const newPriority = editForm.querySelector('.edit-priority').value;
+                span.textContent = newText;
+                detailsSpan.textContent = `Est: ${newEstimate}m | Tracked: ${formatTime(parseInt(li.dataset.timeSpent, 10))}`;
+                tagsDiv.innerHTML = ''; newTags.forEach(tag => { const tagSpan = document.createElement('span');
+                    tagSpan.className = 'task-tag'; tagSpan.textContent = `#${tag}`; tagsDiv.appendChild(tagSpan); });
+                li.dataset.estimate = newEstimate; li.dataset.tags = newTags.join(','); li.dataset.priority = newPriority;
+                li.classList.remove('priority-High', 'priority-Medium', 'priority-Low'); li.classList.add(`priority-${newPriority}`);
+                li.removeChild(editForm); textContentDiv.style.display = 'flex'; editBtn.textContent = "Edit"; saveTasks();
+            }
+        };
+        const delBtn = document.createElement("button"); delBtn.textContent = "Delete";
+        delBtn.onclick = () => { showConfirmation("Are you sure you want to delete this task?", () => { li.remove(); saveTasks(); updateProgressChart(); }); };
+        const completedBtn = document.createElement("button"); completedBtn.textContent = "Completed";
+        completedBtn.onclick = () => { li.classList.toggle('done'); saveTasks(); updateProgressChart(); };
+        controlsDiv.appendChild(selectBtn); controlsDiv.appendChild(editBtn); controlsDiv.appendChild(delBtn); controlsDiv.appendChild(completedBtn);
+        li.appendChild(controlsDiv); return li;
+    }
+    function saveTasks() {
+        const tasks = [];
+        document.querySelectorAll("#taskList .task").forEach(li => {
+            const originalTasks = JSON.parse(localStorage.getItem("tasks")) || [];
+            const originalTask = originalTasks.find(t => t.id == li.dataset.id) || { history: [] };
+            tasks.push({ id: li.dataset.id, text: li.querySelector(".task-name").textContent, done: li.classList.contains("done"),
+                timeSpent: parseInt(li.dataset.timeSpent, 10), tags: li.dataset.tags.split(',').filter(Boolean),
+                estimate: parseInt(li.dataset.estimate, 10) || 0, priority: li.dataset.priority || 'Medium', history: originalTask.history });
+        });
+        localStorage.setItem("tasks", JSON.stringify(tasks));
+    }
+    function loadTasks() {
+      const tasks = JSON.parse(localStorage.getItem("tasks")) || [];
+      const taskList = document.getElementById("taskList"); taskList.innerHTML = "";
+      tasks.forEach(task => { const li = createTaskElement(task); taskList.appendChild(li); });
+      updateProgressChart();
+    }
+    function updatePomodoroDurations() {
+        isPaused = true; clearInterval(timerInterval);
+        pomodoroDurations.work = parseInt(document.getElementById('workDuration').value) || 25;
+        pomodoroDurations.shortBreak = parseInt(document.getElementById('shortBreakDuration').value) || 5;
+        pomodoroDurations.longBreak = parseInt(document.getElementById('longBreakDuration').value) || 15;
+        timeLeft = pomodoroDurations[pomodoroState] * 60; updateTimerDisplay();
+    }
+    function setPomodoroMode(mode) {
+        pomodoroState = mode; isPaused = true; clearInterval(timerInterval);
+        timeLeft = pomodoroDurations[mode] * 60; updateTimerDisplay(); updatePomodoroDisplay();
+    }
+    function startTimer() {
+        if (!activeTaskElement && pomodoroState === 'work') { alert("Please select a task to track time against."); return; }
+        if (!isPaused) return; isPaused = false; sessionStartTime = Date.now(); clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            if (isPaused) return;
+            if (timeLeft <= 0) {
+                stopAndSwitch(); showNotification(`Time for your ${pomodoroState === 'work' ? 'break' : 'next session'}!`);
+                if (document.getElementById("soundToggle").checked) { document.getElementById("alarmSound").play(); }
+            } else {
+                timeLeft--;
+                if (pomodoroState === 'work' && activeTaskElement) {
+                    let trackedSeconds = parseInt(activeTaskElement.dataset.timeSpent, 10) + 1;
+                    activeTaskElement.dataset.timeSpent = trackedSeconds;
+                    const detailsSpan = activeTaskElement.querySelector('.task-details');
+                    if(detailsSpan) { const estimateText = (detailsSpan.textContent.split('|')[0] || '').trim();
+                         detailsSpan.textContent = `${estimateText} | Tracked: ${formatTime(trackedSeconds)}`; }
+                }
+                updateTimerDisplay();
+            }
+        }, 1000);
+    }
+    function pauseTimer() { if(isPaused) return; isPaused = true; saveTimedSession(); }
+    function stopTimer() { isPaused = true; clearInterval(timerInterval); saveTimedSession();
+        timeLeft = pomodoroDurations[pomodoroState] * 60; updateTimerDisplay(); }
+    function saveTimedSession() {
+        if (!sessionStartTime || pomodoroState !== 'work' || !activeTaskElement) return;
+        const elapsedSeconds = Math.round((Date.now() - sessionStartTime) / 1000);
+        if (elapsedSeconds < 1) return;
+        const tasks = JSON.parse(localStorage.getItem("tasks")) || [];
+        const taskIndex = tasks.findIndex(t => t.id == activeTaskElement.dataset.id);
+        if (taskIndex > -1) {
+            if (!tasks[taskIndex].history) tasks[taskIndex].history = [];
+            tasks[taskIndex].history.push({ date: new Date().toISOString(), duration: elapsedSeconds });
+            tasks[taskIndex].timeSpent = parseInt(activeTaskElement.dataset.timeSpent, 10);
+            localStorage.setItem("tasks", JSON.stringify(tasks));
+        }
+        sessionStartTime = null; calculateAndDisplayDailyHours();
+    }
+    function updateProgressChart() {
+        const tasks = document.querySelectorAll('#taskList .task'); const totalTasks = tasks.length;
+        const completedTasks = document.querySelectorAll('#taskList .task.done').length; const openTasks = totalTasks - completedTasks;
+        const canvas = document.getElementById('progressChart'); if (!canvas) return; const ctx = canvas.getContext('2d');
+        const progressText = document.getElementById('progressText'); ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (totalTasks === 0) { progressText.textContent = "Add tasks to see progress."; return; }
+        const completedAngle = (completedTasks / totalTasks) * 2 * Math.PI; const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2; const radius = canvas.width / 2 - 10;
+        ctx.beginPath(); ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--pie-open-color').trim(); ctx.fill();
+        if (completedTasks > 0) { ctx.beginPath(); ctx.moveTo(centerX, centerY);
+            ctx.arc(centerX, centerY, radius, -0.5 * Math.PI, completedAngle - 0.5 * Math.PI);
+            ctx.closePath(); ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--pie-done-color').trim(); ctx.fill(); }
+        progressText.innerHTML = `<strong>${completedTasks}</strong> Completed / <strong>${openTasks}</strong> Open`;
+    }
+    function showConfirmation(text, callback) {
+        const modal = document.getElementById('confirmModal'); const confirmText = document.getElementById('confirmText');
+        const yesBtn = document.getElementById('confirmBtnYes'); const noBtn = document.getElementById('confirmBtnNo');
+        confirmText.textContent = text;
+        const newYesBtn = yesBtn.cloneNode(true); yesBtn.parentNode.replaceChild(newYesBtn, yesBtn);
+        const newNoBtn = noBtn.cloneNode(true); noBtn.parentNode.replaceChild(newNoBtn, noBtn);
+        modal.style.display = 'block'; const close = () => modal.style.display = 'none';
+        newYesBtn.addEventListener('click', () => { close(); callback(); }); newNoBtn.addEventListener('click', close);
+    }
+    function formatTime(seconds) {
+        const h = Math.floor(seconds / 3600); const m = Math.floor((seconds % 3600) / 60); const s = seconds % 60;
+        let str = ''; if (h > 0) str += `${h}h `; if (m > 0) str += `${m}m `; if (s > 0 || str === '') str += `${s}s`;
+        return str.trim();
+    }
+    function updatePomodoroDisplay() {
+        let stateText = '';
+        switch(pomodoroState){
+            case 'work': stateText = `WORK (${pomodoroCycle}/4)`; break;
+            case 'shortBreak': stateText = `SHORT BREAK (${pomodoroCycle}/4)`; break;
+            case 'longBreak': stateText = `LONG BREAK`; break;
+        }
+        document.getElementById('pomodoroState').textContent = stateText;
+    }
+    function resetTimer(isSoft = false) { isPaused = true; clearInterval(timerInterval); saveTimedSession();
+        if (!isSoft) pomodoroCycle = 1; setPomodoroMode(pomodoroState); }
+    function stopAndSwitch() {
+        saveTimedSession();
+        if (pomodoroState === 'work') { pomodoroCycle = Math.min(4, pomodoroCycle + 1);
+            if (pomodoroCycle < 4) { setPomodoroMode('shortBreak'); } else { setPomodoroMode('longBreak'); }
+        } else { if (pomodoroState === 'longBreak') { pomodoroCycle = 1; } setPomodoroMode('work'); }
+    }
+    function updateTimerDisplay() {
+        const mins = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+        const secs = (timeLeft % 60).toString().padStart(2, '0');
+        document.getElementById("timer").textContent = `${mins}:${secs}`; document.title = `${mins}:${secs} - TO-DO LIST`;
+    }
+    function filterTasksByTag(event) {
+        const filterText = event.target.value.toLowerCase().trim();
+        document.querySelectorAll('#taskList .task').forEach(li => {
+            const taskTags = li.dataset.tags.split(',');
+            const hasTag = taskTags.some(tag => tag.toLowerCase().includes(filterText));
+            li.style.display = (filterText === '' || hasTag) ? 'flex' : 'none';
+        });
+    }
+    function calculateAndDisplayDailyHours() {
+        const tasks = JSON.parse(localStorage.getItem("tasks")) || []; const dailyTotals = {};
+        tasks.forEach(task => { if (task.history) {
+                task.history.forEach(entry => {
+                    const date = new Date(entry.date).toLocaleDateString([], { year: 'numeric', month: 'long', day: 'numeric' });
+                    if (!dailyTotals[date]) dailyTotals[date] = 0; dailyTotals[date] += entry.duration; }); } });
+        const display = document.getElementById('dailyHoursDisplay');
+        if (Object.keys(dailyTotals).length === 0) { display.textContent = "No work tracked yet."; return; }
+        let html = '<ul style="padding: 0; list-style: none;">';
+        for (const date in dailyTotals) { html += `<li><strong>${date}:</strong> ${formatTime(dailyTotals[date])}</li>`; }
+        html += '</ul>'; display.innerHTML = html;
+    }
+    function sortTasksByPriority() {
+        const taskList = document.getElementById('taskList'); const tasks = Array.from(taskList.querySelectorAll('.task'));
+        const priorityOrder = { 'High': 1, 'Medium': 2, 'Low': 3 }; const originalTasks = JSON.parse(localStorage.getItem('tasks')) || [];
+        tasks.sort((a, b) => {
+            const taskA = originalTasks.find(t => t.id == a.dataset.id); const taskB = originalTasks.find(t => t.id == b.dataset.id);
+            if (!taskA || !taskB) return 0; return priorityOrder[taskA.priority] - priorityOrder[taskB.priority];
+        });
+        tasks.forEach(task => taskList.appendChild(task)); saveTasks();
+    }
+    function saveTasksToFile() {
+      const tasks = JSON.parse(localStorage.getItem("tasks")) || [];
+      const blob = new Blob([JSON.stringify(tasks, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob); const a = document.createElement("a");
+      a.href = url; a.download = "tasks.json"; document.body.appendChild(a); a.click();
+      document.body.removeChild(a); URL.revokeObjectURL(url);
+    }
+    function loadTasksFromFile(event) {
+      const file = event.target.files[0]; if (!file) return; const reader = new FileReader();
+      reader.onload = function(e) {
+        const tasks = JSON.parse(e.target.result); localStorage.setItem("tasks", JSON.stringify(tasks));
+        const taskList = document.getElementById("taskList"); taskList.innerHTML = "";
+        tasks.forEach(task => { const li = createTaskElement(task); taskList.appendChild(li); });
+        updateProgressChart(); calculateAndDisplayDailyHours();
+      };
+      reader.readAsText(file);
+    }
+    function toggleDarkMode() {
+      const body = document.body; const isDark = body.getAttribute("data-theme") === "dark";
+      body.setAttribute("data-theme", isDark ? "light" : "dark");
+      document.getElementById("themeIndicator").textContent = isDark ? "☀️" : "🌙"; updateProgressChart();
+    }
+    function handleCustomSound(event) {
+      const file = event.target.files[0]; if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) { document.getElementById("alarmSound").src = e.target.result; };
+        reader.readAsDataURL(file);
+      }
+    }
+    function showStatsModal() {
+        const tasks = JSON.parse(localStorage.getItem("tasks")) || [];
+        const contentDiv = document.getElementById('statsContent');
+        contentDiv.innerHTML = '<h3>Total Time Tracked Per Task</h3>'; const list = document.createElement('ul');
+        tasks.filter(t => t.timeSpent > 0).forEach(task => {
+            const item = document.createElement('li'); item.textContent = `${task.text}: ${formatTime(task.timeSpent)}`;
+            list.appendChild(item);
+        });
+        contentDiv.appendChild(list); document.getElementById('statsModal').style.display = 'block';
+    }
+    function showNotification(body) {
+        if (!("Notification" in window) || Notification.permission !== "granted") return;
+        new Notification("TO-DO LIST", { body: body, icon: "https://cdn-icons-png.flaticon.com/512/152/152534.png" });
+    }
+    function addDragAndDropHandlers() {
+        const taskList = document.getElementById('taskList'); let draggedItem = null;
+        taskList.addEventListener('dragstart', e => { draggedItem = e.target; setTimeout(() => e.target.classList.add('dragging'), 0); });
+        taskList.addEventListener('dragend', e => { e.target.classList.remove('dragging'); saveTasks(); });
+        taskList.addEventListener('dragover', e => { e.preventDefault(); const afterElement = getDragAfterElement(taskList, e.clientY); if (afterElement == null) { taskList.appendChild(draggedItem); } else { taskList.insertBefore(draggedItem, afterElement); } });
+    }
+    function getDragAfterElement(container, y) {
+        const draggableElements = [...container.querySelectorAll('.task:not(.dragging)')];
+        return draggableElements.reduce((closest, child) => {
+            const box = child.getBoundingClientRect(); const offset = y - box.top - box.height / 2;
+            if (offset < 0 && offset > closest.offset) { return { offset: offset, element: child }; } else { return closest; }
+        }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+    function addKeyboardShortcuts() {
+        document.addEventListener('keydown', e => {
+            if (document.activeElement.tagName === 'INPUT') return;
+            if (e.ctrlKey || e.metaKey) {
+                switch(e.key.toLowerCase()) {
+                    case 's': e.preventDefault(); isPaused ? startTimer() : pauseTimer(); break;
+                }
+            }
+        });
+    }
+  </script>
+</body>
+</html>
